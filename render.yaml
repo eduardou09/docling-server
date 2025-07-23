@@ -4,7 +4,11 @@ services:
     env: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    healthCheckPath: /health
+    buildCommand: ""
+    startCommand: ""
     envVars:
       - key: PORT
         value: 8080
+      - key: PYTHONUNBUFFERED
+        value: 1
+    healthCheckPath: /health
