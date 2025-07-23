@@ -1,25 +1,32 @@
+# Use Python 3.11 slim image
 FROM python:3.11-slim
 
-# Instalar dependências do sistema
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-# Definir diretório de trabalho
+# Set working directory
 WORKDIR /app
 
-# Copiar requirements
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    software-properties-common \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Instalar dependências Python
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código da aplicação
+# Copy application code
 COPY . .
 
-# Expor porta
+# Expose port
 EXPOSE 8080
 
-# Comando para iniciar o servidor
-CMD ["python", "server.py"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Run the application
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]
