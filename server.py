@@ -85,7 +85,7 @@ def create_fallback_response(filename: str) -> Dict[str, Any]:
 def process_with_docling(file_path: str, filename: str) -> Dict[str, Any]:
     """Process document using Docling library"""
     try:
-        # Configure pipeline options
+        # Configure pipeline options with backend
         pipeline_options = PdfPipelineOptions(
             do_ocr=True,
             do_table_structure=True,
@@ -94,6 +94,7 @@ def process_with_docling(file_path: str, filename: str) -> Dict[str, Any]:
             },
             generate_page_images=True,
             generate_table_images=True,
+            backend=PyPdfiumDocumentBackend()  # ESSA LINHA É O AJUSTE!
         )
         
         # Initialize converter
