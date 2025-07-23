@@ -1,22 +1,25 @@
 FROM python:3.11-slim
 
-# Instalar dependências do sistema necessárias
+# Instalar dependências do sistema
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar docling
-RUN pip install docling[default]
-
-# Criar diretório de trabalho
+# Definir diretório de trabalho
 WORKDIR /app
 
-# Copiar arquivos da aplicação
+# Copiar requirements
+COPY requirements.txt .
+
+# Instalar dependências Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código da aplicação
 COPY . .
 
 # Expor porta
 EXPOSE 8080
 
 # Comando para iniciar o servidor
-CMD ["python", "-m", "docling_serve", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["python", "server.py"]
