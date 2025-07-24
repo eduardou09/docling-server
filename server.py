@@ -4,14 +4,13 @@ from fastapi.responses import JSONResponse
 import tempfile
 import os
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 import traceback
 
 try:
-    from docling.document_converter import DocumentConverter
+    from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import PdfPipelineOptions
-    from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
     DOCLING_AVAILABLE = True
 except ImportError:
     DOCLING_AVAILABLE = False
@@ -26,7 +25,8 @@ app = FastAPI(
     version="1.0.0"
 )
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_credentials=True,
+    CORSMiddleware,
+    allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
 
@@ -56,16 +56,23 @@ def create_fallback_response(filename: str) -> Dict[str, Any]:
         }
     }
 
-def process_with_docling(file_path: str, filename: str) -> Dict[str, Any]:
+def process_with_docling(file_path: str, filename: str,
+                         ocr_enabled: bool = True,
+                         generate_page_images: bool = True,
+                         generate_table_images: bool = True) -> Dict[str, Any]:
     try:
         pipeline_options = PdfPipelineOptions(
-            do_ocr=True,
+            do_ocr=ocr_enabled,
             do_table_structure=True,
             table_structure_options={"do_cell_matching": True},
-            generate_page_images=True,
-            generate_table_images=True
+            generate_page_images=generate_page_images,
+            generate_table_images=generate_table_images
         )
-        converter = DocumentConverter(format_options={InputFormat.PDF: pipeline_options})
+        converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
         result = converter.convert(file_path)
         doc = result.document
 
@@ -84,7 +91,7 @@ def process_with_docling(file_path: str, filename: str) -> Dict[str, Any]:
                 "page": tbl.page_no if hasattr(tbl, 'page_no') else 1
             })
 
-        pages = [{"page": idx+1, "size": {"width": pg.size.width, "height": pg.size.height}} for idx, pg in enumerate(doc.pages)]
+        pages = [{"page": idx + 1, "size": {"width": pg.size.width, "height": pg.size.height}} for idx, pg in enumerate(doc.pages)]
         return {"document": {"text": doc.text, "elements": elements, "pages": pages}}
 
     except Exception as e:
@@ -100,15 +107,29 @@ async def convert_document(
     generate_table_images: Optional[str] = Form(default="true")
 ):
     try:
-        logger.info(f"Processing file: {file.filename}, size: {file.size}")
+        logger.info(f"Processing file: {file.filename}")
         ext = os.path.splitext(file.filename)[1].lower()
         if ext not in ['.pdf', '.docx', '.doc', '.txt']:
             raise HTTPException(status_code=400, detail="Unsupported file type")
+
+        # Convert string form values to boolean
+        ocr_enabled_bool = str(ocr_enabled).lower() == "true"
+        generate_page_images_bool = str(generate_page_images).lower() == "true"
+        generate_table_images_bool = str(generate_table_images).lower() == "true"
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp.write(await file.read())
             tmp_path = tmp.name
         try:
-            result = process_with_docling(tmp_path, file.filename) if DOCLING_AVAILABLE else create_fallback_response(file.filename)
+            if DOCLING_AVAILABLE:
+                result = process_with_docling(
+                    tmp_path, file.filename,
+                    ocr_enabled=ocr_enabled_bool,
+                    generate_page_images=generate_page_images_bool,
+                    generate_table_images=generate_table_images_bool
+                )
+            else:
+                result = create_fallback_response(file.filename)
             return JSONResponse(content=result)
         finally:
             os.unlink(tmp_path)
